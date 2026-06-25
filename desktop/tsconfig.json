@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@excalidraw/common": ["../packages/common/src/index.ts"],
+      "@excalidraw/common/*": ["../packages/common/src/*"],
+      "@excalidraw/element": ["../packages/element/src/index.ts"],
+      "@excalidraw/element/*": ["../packages/element/src/*"],
+      "@excalidraw/excalidraw": ["../packages/excalidraw/index.tsx"],
+      "@excalidraw/excalidraw/*": ["../packages/excalidraw/*"],
+      "@excalidraw/math": ["../packages/math/src/index.ts"],
+      "@excalidraw/math/*": ["../packages/math/src/*"],
+      "@excalidraw/utils": ["../packages/utils/src/index.ts"],
+      "@excalidraw/utils/*": ["../packages/utils/src/*"],
+      "@excalidraw/fractional-indexing": ["../packages/fractional-indexing/src/index.ts"],
+      "@excalidraw/laser-pointer": ["../packages/laser-pointer/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.mts"]
+}

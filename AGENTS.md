@@ -52,7 +52,11 @@ Yarn workspaces monorepo. Internal `@excalidraw/*` packages resolve to **source*
 
 ## Generated code (do not hand-edit)
 
-- `packages/excalidraw/fonts/wasm/*-wasm.ts` are generated from `.wasm` binaries by `scripts/buildWasm.js` (base64-encodes woff2 + harfbuzz). Regenerate via that script if inputs change.
+- `packages/excalidraw/subset/{harfbuzz,woff2}/*-wasm.ts` are generated (base64-encoded harfbuzz + woff2 binaries) for font subsetting. Regenerate via `scripts/buildWasm.js` if inputs change (note: that script's dest paths still point to the old `fonts/wasm/` location and need aligning to `subset/` before rerunning).
+
+## Project docs
+
+- In-depth project docs (startup, architecture, UI layout, media-canvas refactor plan) live in [`docs/`](./docs/README.md). This file stays at repo root so agent tooling can auto-discover it.
 
 ## Environment
 

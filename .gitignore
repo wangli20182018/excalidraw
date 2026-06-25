@@ -27,3 +27,12 @@ dev-dist
 html
 meta*.json
 .claude
+
+# desktop (Tauri × Excalidraw) build artifacts
+desktop/src-tauri/target
+desktop/src-tauri/gen
+desktop/dist
+desktop/node_modules
+# Tauri bundle outputs (.app/.dmg/.exe/…) live under target/, covered above
+*.dmg
+*.app

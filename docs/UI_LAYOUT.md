@@ -6,7 +6,7 @@
 https://heptabase.com/pricing
 https://fabric.so/pricing-and-plans-for-individuals?utm_source=chatgpt.com
 https://affine.pro/?utm_source=chatgpt.com
-
+AI 空间记忆
 
 ## 1. 总体结构
 
