@@ -1,3 +1,11 @@
+你是在做：
+
+👉 AI Native Spatial Operating System
+
+它的本质是：
+
+用空间结构驱动“知识 + 内容 + 生产 + 执行”
+
 # Desktop Shell (Tauri × Excalidraw)
 
 Phase 1 / P0 scaffold. Excalidraw is embedded as the **pure spatial engine**; cards / overlay / runtime land in later phases.
