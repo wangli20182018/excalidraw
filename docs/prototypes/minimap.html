@@ -46,6 +46,7 @@
     const BOX_W = 208;
     const BOX_H = 146;
     const PAD = 80;
+    const DRAG_SENSITIVITY = 0.4; // lower = less sensitive drag
 
     // 模拟 Excalidraw 的场景数据 (包含几个图形)
     const scene = {
@@ -219,7 +220,7 @@
     }
 
     // --- 交互事件：小地图的点击与拖拽平移 ---
-    function panToCenter(clientX, clientY) {
+    function panToCenter(clientX, clientY, damped = false) {
       const r = miniCanvas.getBoundingClientRect();
       const mx = ((clientX - r.left) / r.width) * BOX_W;
       const my = ((clientY - r.top) / r.height) * BOX_H;
@@ -229,8 +230,16 @@
       const wy = (my - offY) / scale + worldMinY;
       
       const z = scene.appState.zoom.value;
-      scene.appState.scrollX = wx - scene.appState.width / (2 * z);
-      scene.appState.scrollY = wy - scene.appState.height / (2 * z);
+      let targetX = wx;
+      let targetY = wy;
+      if (damped) {
+        const currentCenterX = scene.appState.width / (2 * z) - scene.appState.scrollX;
+        const currentCenterY = scene.appState.height / (2 * z) - scene.appState.scrollY;
+        targetX = currentCenterX + (wx - currentCenterX) * DRAG_SENSITIVITY;
+        targetY = currentCenterY + (wy - currentCenterY) * DRAG_SENSITIVITY;
+      }
+      scene.appState.scrollX = targetX - scene.appState.width / (2 * z);
+      scene.appState.scrollY = targetY - scene.appState.height / (2 * z);
       
       update();
     }
@@ -243,7 +252,7 @@
       panToCenter(e.clientX, e.clientY);
     });
     minimapBox.addEventListener('pointermove', (e) => {
-      if (isDragging) panToCenter(e.clientX, e.clientY);
+      if (isDragging) panToCenter(e.clientX, e.clientY, true);
     });
     minimapBox.addEventListener('pointerup', () => isDragging = false);
 

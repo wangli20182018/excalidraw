@@ -8,6 +8,7 @@ import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 const BOX_W = 208;
 const BOX_H = 146;
 const PAD = 80; // scene padding around the (elements ∪ viewport) frame, per 1.html
+const DRAG_SENSITIVITY = 0.4; // lower = less sensitive drag, 1 = original behavior
 
 export type MinimapScene = {
   elements: readonly NonDeletedExcalidrawElement[];
@@ -220,7 +221,11 @@ export function Minimap({ excalidrawAPI, subscribe }: Props) {
 
   // click/drag -> center that world point. From scene/scroll.ts centerScrollOn:
   //   scrollX = width/(2*zoom) - scenePoint.x
-  const panToCenter = (clientX: number, clientY: number) => {
+  const panToCenter = (
+    clientX: number,
+    clientY: number,
+    damped = false,
+  ) => {
     const d = latest.current;
     const canvas = canvasRef.current;
     if (!d || !canvas || !excalidrawAPI) {
@@ -233,10 +238,22 @@ export function Minimap({ excalidrawAPI, subscribe }: Props) {
     const wx = (mx - offX) / scale + minX;
     const wy = (my - offY) / scale + minY;
     const z = d.appState.zoom.value;
+
+    let targetX = wx;
+    let targetY = wy;
+    if (damped) {
+      const currentCenterX =
+        d.appState.width / (2 * z) - d.appState.scrollX;
+      const currentCenterY =
+        d.appState.height / (2 * z) - d.appState.scrollY;
+      targetX = currentCenterX + (wx - currentCenterX) * DRAG_SENSITIVITY;
+      targetY = currentCenterY + (wy - currentCenterY) * DRAG_SENSITIVITY;
+    }
+
     excalidrawAPI.updateScene({
       appState: {
-        scrollX: d.appState.width / (2 * z) - wx,
-        scrollY: d.appState.height / (2 * z) - wy,
+        scrollX: d.appState.width / (2 * z) - targetX,
+        scrollY: d.appState.height / (2 * z) - targetY,
       },
     });
   };
@@ -249,7 +266,7 @@ export function Minimap({ excalidrawAPI, subscribe }: Props) {
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (dragging) {
-      panToCenter(e.clientX, e.clientY);
+      panToCenter(e.clientX, e.clientY, true);
     }
   };
   const onPointerUp = () => {
