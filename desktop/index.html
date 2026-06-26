@@ -11,6 +11,8 @@
     <script>
       // Excalidraw reads font assets relative to this path during dev
       window.EXCALIDRAW_ASSET_PATH = window.origin;
+      // throttle scene rendering (matches excalidraw-app) for smoother pan/zoom/search
+      window.EXCALIDRAW_THROTTLE_RENDER = true;
     </script>
   </head>
   <body>

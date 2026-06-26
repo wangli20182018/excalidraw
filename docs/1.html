@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excalidraw 高颜值小地图交互演示</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* 辅助样式：让大画布有网格背景，更像 Excalidraw */
+    .canvas-bg {
+      background-color: #ffffff;
+      background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+  </style>
+</head>
+<body class="overflow-hidden m-0 p-0 h-screen w-screen bg-gray-50 flex items-center justify-center select-none">
+
+  <div class="absolute top-6 left-6 text-sm text-gray-500 max-w-sm pointer-events-none z-0">
+    <h1 class="text-lg font-bold text-gray-800 mb-1">Excalidraw 模拟画布</h1>
+    <p>• 滚动鼠标滚轮可以 <strong>无限放大 / 缩小</strong> 主画布</p>
+    <p>• 按住 <strong>鼠标右键 / 中键</strong> 拖拽可以平移主画布</p>
+    <p>• 右下角为优化后的 <strong>高颜值小地图</strong>，支持点击和拖拽同步</p>
+  </div>
+
+  <canvas id="mainCanvas" class="canvas-bg w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+  <div class="absolute bottom-6 right-6 z-10 pointer-events-none">
+    <div
+      id="minimapBox"
+      class="group relative pointer-events-auto cursor-crosshair rounded-xl border border-black/[0.06] bg-white/75 shadow-xl shadow-black/[0.04] backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/[0.08]"
+      style="width: 208px; height: 146px;"
+    >
+      <canvas id="minimapCanvas" class="block rounded-xl" style="width: 208px; height: 146px;"></canvas>
+      
+      <button 
+        id="resetBtn"
+        class="absolute bottom-2 left-2 pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/90 hover:bg-white text-xs font-medium text-gray-600 px-2 py-1 rounded-md shadow-sm border border-gray-200 cursor-pointer"
+      >
+        重置视角
+      </button>
+    </div>
+  </div>
+  <script>
+    // --- 模拟数据与常量 ---
+    const BOX_W = 208;
+    const BOX_H = 146;
+    const PAD = 80;
+
+    // 模拟 Excalidraw 的场景数据 (包含几个图形)
+    const scene = {
+      elements: [
+        { type: 'rectangle', x: 100, y: 150, width: 120, height: 80, strokeColor: '#1e3a8a', backgroundColor: '#dbeafe', angle: 0.1 },
+        { type: 'ellipse', x: 300, y: 100, width: 100, height: 100, strokeColor: '#b45309', backgroundColor: '#fef3c7', angle: 0 },
+        { type: 'diamond', x: 150, y: 350, width: 90, height: 90, strokeColor: '#047857', backgroundColor: '#d1fae5', angle: -0.2 },
+        { type: 'text', x: 450, y: 300, width: 150, height: 40, strokeColor: '#6b21a8', backgroundColor: 'transparent', angle: 0 },
+        { type: 'freedraw', x: 0, y: 0, width: 100, height: 100, strokeColor: '#e11d48', points: [[400,200], [420,210], [450,190], [430,250], [480,260]] }
+      ],
+      appState: {
+        scrollX: 0,
+        scrollY: 0,
+        zoom: { value: 1 },
+        width: window.innerWidth,
+        height: window.innerHeight,
+        offsetLeft: 0,
+        offsetTop: 0
+      }
+    };
+
+    // --- DOM 元素获取 ---
+    const mainCanvas = document.getElementById('mainCanvas');
+    const mainCtx = mainCanvas.getContext('2d');
+    const miniCanvas = document.getElementById('minimapCanvas');
+    const miniCtx = miniCanvas.getContext('2d');
+    const minimapBox = document.getElementById('minimapBox');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // 缓存变换矩阵
+    let xform = { scale: 1, offX: 0, offY: 0, worldMinX: 0, worldMinY: 0 };
+
+    // --- 核心：渲染小地图 (对应你 React 里的 draw 方法) ---
+    function drawMinimap() {
+      const dpr = window.devicePixelRatio || 1;
+      if (miniCanvas.width !== BOX_W * dpr) {
+        miniCanvas.width = BOX_W * dpr;
+        miniCanvas.height = BOX_H * dpr;
+      }
+      miniCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      miniCtx.clearRect(0, 0, BOX_W, BOX_H);
+
+      const els = scene.elements;
+      const appState = scene.appState;
+
+      // 1. 计算包围盒
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const el of els) {
+        minX = Math.min(minX, el.x);
+        minY = Math.min(minY, el.y);
+        maxX = Math.max(maxX, el.x + el.width);
+        maxY = Math.max(maxY, el.y + el.height);
+      }
+
+      const z = appState.zoom.value;
+      const vLeft = appState.scrollX; 
+      const vTop = appState.scrollY;
+      const vW = appState.width / z;
+      const vH = appState.height / z;
+
+      minX = Math.min(minX, vLeft) - PAD;
+      minY = Math.min(minY, vTop) - PAD;
+      maxX = Math.max(maxX, vLeft + vW) + PAD;
+      maxY = Math.max(maxY, vTop + vH) + PAD;
+
+      const worldW = Math.max(1, maxX - minX);
+      const worldH = Math.max(1, maxY - minY);
+
+      // 2. 映射比例
+      const scale = Math.min(BOX_W / worldW, BOX_H / worldH);
+      const offX = (BOX_W - worldW * scale) / 2;
+      const offY = (BOX_H - worldH * scale) / 2;
+      xform = { scale, offX, offY, worldMinX: minX, worldMinY: minY };
+
+      const toMiniX = (wx) => (wx - minX) * scale + offX;
+      const toMiniY = (wy) => (wy - minY) * scale + offY;
+
+      // 3. 绘制简化图形
+      for (const el of els) {
+        const x = toMiniX(el.x);
+        const y = toMiniY(el.y);
+        const w = Math.max(0.5, el.width * scale);
+        const h = Math.max(0.5, el.height * scale);
+
+        miniCtx.save();
+        miniCtx.translate(x + w / 2, y + h / 2);
+        miniCtx.rotate(el.angle || 0);
+        miniCtx.translate(-w / 2, -h / 2);
+
+        miniCtx.lineWidth = 1;
+        miniCtx.strokeStyle = el.strokeColor;
+
+        if (el.type === "ellipse") {
+          miniCtx.beginPath();
+          miniCtx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+          if (el.backgroundColor !== "transparent") { miniCtx.fillStyle = el.backgroundColor; miniCtx.fill(); }
+          miniCtx.stroke();
+        } else if (el.type === "freedraw") {
+          miniCtx.beginPath();
+          el.points.forEach((p, i) => {
+            const px = (p[0] - el.x) * scale;
+            const py = (p[1] - el.y) * scale;
+            if (i === 0) miniCtx.moveTo(px, py); else miniCtx.lineTo(px, py);
+          });
+          miniCtx.stroke();
+        } else {
+          miniCtx.beginPath();
+          if (el.type === "diamond") {
+            miniCtx.moveTo(w / 2, 0); miniCtx.lineTo(w, h / 2); miniCtx.lineTo(w / 2, h); miniCtx.lineTo(0, h / 2); miniCtx.closePath();
+          } else {
+            miniCtx.rect(0, 0, w, h);
+          }
+          if (el.backgroundColor !== "transparent") { miniCtx.fillStyle = el.backgroundColor; miniCtx.fill(); }
+          if (el.type === "text") { miniCtx.fillStyle = el.strokeColor; miniCtx.fillRect(0, 0, w, Math.max(1, h)); } else { miniCtx.stroke(); }
+        }
+        miniCtx.restore();
+      }
+
+      // 4. 绘制精致的高颜值视口矩形
+      miniCtx.strokeStyle = "#4f46e5"; // 现代感靛蓝
+      miniCtx.lineWidth = 1.5;
+      miniCtx.setLineDash([3, 3]); // 精致短虚线
+      miniCtx.strokeRect(toMiniX(vLeft), toMiniY(vTop), vW * scale, vH * scale);
+      miniCtx.setLineDash([]);
+      miniCtx.fillStyle = "rgba(79, 70, 229, 0.04)"; // 通透的微蓝填充
+      miniCtx.fillRect(toMiniX(vLeft), toMiniY(vTop), vW * scale, vH * scale);
+    }
+
+    // --- 辅助：渲染主大画布 ---
+    function drawMainCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      mainCanvas.width = window.innerWidth * dpr;
+      mainCanvas.height = window.innerHeight * dpr;
+      mainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      mainCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+      mainCtx.save();
+      mainCtx.translate(-scene.appState.scrollX * scene.appState.zoom.value, -scene.appState.scrollY * scene.appState.zoom.value);
+      mainCtx.scale(scene.appState.zoom.value, scene.appState.zoom.value);
+
+      for (const el of scene.elements) {
+        mainCtx.save();
+        mainCtx.translate(el.x + el.width/2, el.y + el.height/2);
+        mainCtx.rotate(el.angle);
+        mainCtx.translate(-el.width/2, -el.height/2);
+        
+        mainCtx.strokeStyle = el.strokeColor;
+        mainCtx.fillStyle = el.backgroundColor === 'transparent' ? 'rgba(0,0,0,0)' : el.backgroundColor;
+        mainCtx.lineWidth = 2;
+
+        if(el.type === 'rectangle' || el.type === 'text') {
+          mainCtx.fillRect(0,0, el.width, el.height);
+          mainCtx.strokeRect(0,0, el.width, el.height);
+        } else if(el.type === 'ellipse') {
+          mainCtx.beginPath(); mainCtx.ellipse(el.width/2, el.height/2, el.width/2, el.height/2, 0, 0, Math.PI*2); mainCtx.fill(); mainCtx.stroke();
+        } else if(el.type === 'diamond') {
+          mainCtx.beginPath(); mainCtx.moveTo(el.width/2, 0); mainCtx.lineTo(el.width, el.height/2); mainCtx.lineTo(el.width/2, el.height); mainCtx.lineTo(0, el.height/2); mainCtx.closePath(); mainCtx.fill(); mainCtx.stroke();
+        } else if(el.type === 'freedraw') {
+          mainCtx.beginPath();
+          el.points.forEach((p, i) => { if (i === 0) mainCtx.moveTo(p[0]-el.x, p[1]-el.y); else mainCtx.lineTo(p[0]-el.x, p[1]-el.y); });
+          mainCtx.stroke();
+        }
+        mainCtx.restore();
+      }
+      mainCtx.restore();
+    }
+
+    function update() {
+      drawMainCanvas();
+      drawMinimap();
+    }
+
+    // --- 交互事件：小地图的点击与拖拽平移 ---
+    function panToCenter(clientX, clientY) {
+      const r = miniCanvas.getBoundingClientRect();
+      const mx = ((clientX - r.left) / r.width) * BOX_W;
+      const my = ((clientY - r.top) / r.height) * BOX_H;
+      
+      const { scale, offX, offY, worldMinX, worldMinY } = xform;
+      const wx = (mx - offX) / scale + worldMinX;
+      const wy = (my - offY) / scale + worldMinY;
+      
+      const z = scene.appState.zoom.value;
+      scene.appState.scrollX = wx - scene.appState.width / (2 * z);
+      scene.appState.scrollY = wy - scene.appState.height / (2 * z);
+      
+      update();
+    }
+
+    let isDragging = false;
+    minimapBox.addEventListener('pointerdown', (e) => {
+      if (e.target === resetBtn) return; // 避开重置按钮
+      isDragging = true;
+      minimapBox.setPointerCapture(e.pointerId);
+      panToCenter(e.clientX, e.clientY);
+    });
+    minimapBox.addEventListener('pointermove', (e) => {
+      if (isDragging) panToCenter(e.clientX, e.clientY);
+    });
+    minimapBox.addEventListener('pointerup', () => isDragging = false);
+
+    // --- 重置视角功能 ---
+    resetBtn.addEventListener('click', () => {
+      scene.appState.zoom.value = 1;
+      scene.appState.scrollX = 0;
+      scene.appState.scrollY = 0;
+      update();
+    });
+
+    // --- 辅助交互：主画布的拖拽与缩放 ---
+    let isPanningMain = false;
+    let startX, startY;
+    mainCanvas.addEventListener('pointerdown', (e) => {
+      isPanningMain = true;
+      startX = e.clientX; startY = e.clientY;
+    });
+    mainCanvas.addEventListener('pointermove', (e) => {
+      if(isPanningMain) {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        scene.appState.scrollX -= dx / scene.appState.zoom.value;
+        scene.appState.scrollY -= dy / scene.appState.zoom.value;
+        startX = e.clientX; startY = e.clientY;
+        update();
+      }
+    });
+    window.addEventListener('pointerup', () => isPanningMain = false);
+    mainCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    mainCanvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = 1.1;
+      if (e.deltaY < 0) {
+        scene.appState.zoom.value *= zoomFactor;
+      } else {
+        scene.appState.zoom.value /= zoomFactor;
+      }
+      update();
+    }, { passive: false });
+
+    window.addEventListener('resize', () => {
+      scene.appState.width = window.innerWidth;
+      scene.appState.height = window.innerHeight;
+      update();
+    });
+
+    // 初始化运行
+    update();
+  </script>
+</body>
+</html>

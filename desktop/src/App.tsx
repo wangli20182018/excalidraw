@@ -1,15 +1,47 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import {
   CommandPalette,
   Excalidraw,
+  ExcalidrawAPIProvider,
   MainMenu,
   defaultLang,
   languages,
+  useExcalidrawAPI,
+  useHandleLibrary,
 } from "@excalidraw/excalidraw";
+import type { LibraryPersistenceAdapter } from "@excalidraw/excalidraw/data/library";
 
 import type { Theme } from "@excalidraw/element/types";
 
+import { Minimap } from "./Minimap";
+import type { MinimapScene } from "./Minimap";
+
+// --- Library persistence (localStorage adapter) -----------------------------
+// The core ships no default storage; without an adapter the library is
+// in-memory only (empty every reload, nothing saved). Mirror what
+// excalidraw-app does with IndexedDB, but via localStorage for simplicity.
+const LIB_KEY = "excalidraw-desktop-library";
+
+const libraryAdapter: LibraryPersistenceAdapter = {
+  load: () => {
+    try {
+      const raw = localStorage.getItem(LIB_KEY);
+      return raw ? { libraryItems: JSON.parse(raw) } : null;
+    } catch {
+      return null;
+    }
+  },
+  save: (data) => {
+    try {
+      localStorage.setItem(LIB_KEY, JSON.stringify(data.libraryItems));
+    } catch {
+      // ignore quota / serialization errors
+    }
+  },
+};
+
+// --- Theme ------------------------------------------------------------------
 type ThemeChoice = Theme | "system";
 
 const resolveTheme = (choice: ThemeChoice): Theme =>
@@ -19,18 +51,36 @@ const resolveTheme = (choice: ThemeChoice): Theme =>
       : "light"
     : choice;
 
-export default function App() {
+function Editor() {
   const [langCode, setLangCode] = useState(defaultLang.code);
   const [themeChoice, setThemeChoice] = useState<ThemeChoice>("light");
 
+  const excalidrawAPI = useExcalidrawAPI();
+  useHandleLibrary({ excalidrawAPI, adapter: libraryAdapter });
+
+  // forward scene changes to the minimap without causing editor re-renders
+  const sceneSub = useRef<(d: MinimapScene) => void>(() => {});
+  const subscribe = useCallback(
+    (fn: (d: MinimapScene) => void) => {
+      sceneSub.current = fn;
+    },
+    [],
+  );
+  const handleChange = (
+    elements: readonly MinimapScene["elements"][number][],
+    appState: MinimapScene["appState"],
+    files: MinimapScene["files"],
+  ) => {
+    sceneSub.current({ elements, appState, files });
+  };
+
   return (
-    <div className="workspace-root">
-      {/* P0: Excalidraw as pure spatial engine. Cards/overlay/runtime come in
-          later phases and mount as a sibling layer above this container. */}
+    <>
       <Excalidraw
         langCode={langCode}
         theme={resolveTheme(themeChoice)}
         onThemeChange={(t) => setThemeChoice(t)}
+        onChange={handleChange}
         UIOptions={{
           canvasActions: {
             loadScene: true,
@@ -39,11 +89,6 @@ export default function App() {
           },
         }}
       >
-        {/* Custom MainMenu — assembles the core DefaultItems that the bare
-            default menu leaves out (Preferences, CommandPalette, …) plus a
-            language picker (core ships no language UI, only `langCode`).
-            Styling matches excalidraw-app: the <select> reuses the core
-            `dropdown-select` classes, and ToggleTheme uses allowSystemTheme. */}
         <MainMenu>
           <MainMenu.DefaultItems.LoadScene />
           <MainMenu.DefaultItems.SaveToActiveFile />
@@ -79,10 +124,20 @@ export default function App() {
           <MainMenu.DefaultItems.ChangeCanvasBackground />
         </MainMenu>
 
-        {/* CommandPalette needs to be mounted for its menu item / Cmd+/ to
-            work; it isn't rendered by the default shell. */}
         <CommandPalette />
       </Excalidraw>
+
+      <Minimap excalidrawAPI={excalidrawAPI} subscribe={subscribe} />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <div className="workspace-root">
+      <ExcalidrawAPIProvider>
+        <Editor />
+      </ExcalidrawAPIProvider>
     </div>
   );
 }
