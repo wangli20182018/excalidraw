@@ -12,6 +12,14 @@ Excalidraw 官方文档站点源码在仓库根的 `../dev-docs/`，不在此处
 | [**UI_LAYOUT.md**](./UI_LAYOUT.md) | 页面布局：画布 6 层叠加、桌面 UI 三列（工具栏/属性/侧栏）、对话框、Tunnel 插槽、响应式、Zen/View/Grid 模式 | 想改 UI / 加面板 / 调布局 |
 | [**MEDIA_CANVAS_REFACTOR.md**](./MEDIA_CANVAS_REFACTOR.md) | 多媒体画布改造方案（最终锁定）：Tauri × Excalidraw 纯 Overlay 解耦、卡片系统、三阶段路线（媒体→Runtime→AI） | 做多媒体卡片 / AI 知识画布的总体设计 |
 
+## 原型（prototypes/）
+
+可直接用浏览器打开的交互原型（纯 HTML，无依赖）。
+
+| 原型 | 内容 |
+|------|------|
+| [**prototypes/minimap.html**](./prototypes/minimap.html) | 画布缩略图（小地图）原型：玻璃拟态外观、元素∪视口取景、靛蓝虚线视口框、点击/拖拽平移、滚轮缩放、hover 重置视角。是 `desktop/src/Minimap.tsx` 的视觉/交互参照。 |
+
 ## 仓库根的其它说明文件
 
 | 文件 | 说明 |
